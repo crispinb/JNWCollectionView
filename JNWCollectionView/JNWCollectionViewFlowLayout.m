@@ -46,8 +46,8 @@ typedef struct {
 
 @implementation JNWCollectionViewFlowLayout
 
-- (instancetype)initWithCollectionView:(JNWCollectionView *)collectionView {
-	self = [super initWithCollectionView:collectionView];
+- (instancetype)init {
+	self = [super init];
 	if (self == nil) return nil;
 	_minimumItemHorizontalSeparation = 10.f;
 	return self;
