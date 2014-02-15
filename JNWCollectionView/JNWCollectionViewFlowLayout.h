@@ -11,6 +11,15 @@
 
 #import "JNWCollectionViewLayout.h"
 
+extern NSString * const JNWCollectionViewFlowLayoutFooterKind;
+extern NSString * const JNWCollectionViewFlowLayoutHeaderKind;
+
+typedef NS_ENUM(NSInteger, JNWCollectionViewFlowLayoutAlignment) {
+    JNWCollectionViewFlowLayoutAlignmentTop,
+    JNWCollectionViewFlowLayoutAlignmentCentre,
+    JNWCollectionViewFlowLayoutAlignmentBottom
+};
+
 @protocol JNWCollectionViewFlowLayoutDelegate <NSObject>
 
 - (CGSize)collectionView:(JNWCollectionView *)collectionView sizeForItemAtIndexPath:(NSIndexPath *)indexPath;
@@ -24,7 +33,9 @@
 @interface JNWCollectionViewFlowLayout : JNWCollectionViewLayout
 
 @property (nonatomic, weak) id<JNWCollectionViewFlowLayoutDelegate> delegate;
-//@property (nonatomic, assign) CGFloat minimumItemVerticalSeparation;
-@property (nonatomic, assign) CGFloat minimumItemHorizontalSeparation;
+@property (nonatomic, assign) CGFloat minimumLineSpacing;
+@property (nonatomic, assign) CGFloat minimumInterItemSpacing;
+@property (nonatomic, assign) JNWCollectionViewFlowLayoutAlignment alignment;
+
 
 @end

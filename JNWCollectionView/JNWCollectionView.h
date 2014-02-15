@@ -23,5 +23,6 @@
 #import "JNWCollectionViewReusableView.h"
 #import "JNWCollectionViewLayout.h"
 #import "JNWCollectionViewListLayout.h"
+#import "JNWCollectionViewFlowLayout.h"
 #import "JNWCollectionViewGridLayout.h"
 #import "NSIndexPath+JNWAdditions.h"

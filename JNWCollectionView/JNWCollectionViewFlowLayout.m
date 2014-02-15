@@ -5,18 +5,30 @@
 //  Created by Jonathan Willing on 4/11/13.
 //  Copyright (c) 2013 AppJon. All rights reserved.
 //
+//  TODO: change copyright to ... ?
 
 #import "JNWCollectionViewFlowLayout.h"
+#import "JNWCollectionViewLayout.h"
+
+NSString * const JNWCollectionViewFlowLayoutFooterKind = @"JNWCollectionViewFlowLayoutFooterKind";
+NSString * const JNWCollectionViewFlowLayoutHeaderKind = @"JNWCollectionViewFlowLayoutHeaderKind";
 
 typedef struct {
 	CGPoint origin;
 	CGSize size;
 } JNWCollectionViewFlowLayoutItemInfo;
 
+typedef struct {
+    CGFloat height;
+    CGFloat cursor;
+    NSRange itemsRange;
+} JNWCollectionViewFlowLayoutRowInfo;
+
 @interface JNWCollectionViewFlowLayoutSection : NSObject
 - (instancetype)initWithNumberOfItems:(NSInteger)numberOfItems;
-@property (nonatomic, assign) CGFloat offset;
-@property (nonatomic, assign) CGFloat height;
+@property (nonatomic, assign) CGFloat offset; // items' cached frames are relative to this
+@property (nonatomic, assign) CGFloat height; // as per JNW's grid layout, this is height excluding header/footer
+
 @property (nonatomic, assign) CGFloat headerHeight;
 @property (nonatomic, assign) CGFloat footerHeight;
 @property (nonatomic, assign) NSInteger numberOfItems;
@@ -27,20 +39,21 @@ typedef struct {
 
 - (instancetype)initWithNumberOfItems:(NSInteger)numberOfItems {
 	self = [super init];
-	if (self == nil) return nil;
+	if (self == nil) {return nil;}
 	_numberOfItems = numberOfItems;
 	self.itemInfo = calloc(numberOfItems, sizeof(JNWCollectionViewFlowLayoutItemInfo));
 	return self;
 }
 
 - (void)dealloc {
-	if (_itemInfo != NULL)
+	if (_itemInfo != NULL) {
 		free(_itemInfo);
+	}
 }
 
 @end
 
-@interface JNWCollectionViewFlowLayout()
+@interface JNWCollectionViewFlowLayout ()
 @property (nonatomic, strong) NSMutableArray *sections;
 @end
 
@@ -48,8 +61,10 @@ typedef struct {
 
 - (instancetype)init {
 	self = [super init];
-	if (self == nil) return nil;
-	_minimumItemHorizontalSeparation = 10.f;
+	if (self == nil) {return nil;}
+	_minimumInterItemSpacing = 10.0f;
+	_minimumLineSpacing = 10.0f;
+    _alignment = JNWCollectionViewFlowLayoutAlignmentTop;
 	return self;
 }
 
@@ -60,67 +75,190 @@ typedef struct {
 	return _sections;
 }
 
+//TODO: selection (nextItemInDirection)
+
 - (void)prepareLayout {
-	[self.sections removeAllObjects];
-	
+
+	NSParameterAssert(self.delegate);
 	if (![self.delegate conformsToProtocol:@protocol(JNWCollectionViewFlowLayoutDelegate)]) {
 		NSLog(@"delegate does not conform to JNWCollectionViewFlowLayoutDelegate!");
 	}
-	
-	NSUInteger numberOfSections = [self.collectionView numberOfSections];
-	CGFloat totalHeight = 0;
-	
-	for (NSUInteger section = 0; section < numberOfSections; section++) {
+
+	[self.sections removeAllObjects];
+	NSInteger numberOfSections = [self.collectionView numberOfSections];
+	CGFloat rowWidth = self.collectionView.contentSize.width;
+	CGFloat globalVerticalCursor = 0;
+
+	for (NSInteger section = 0; section < numberOfSections; section++) {
 		NSInteger numberOfItems = [self.collectionView numberOfItemsInSection:section];
-		NSInteger headerHeight = [self.delegate collectionView:self.collectionView heightForHeaderInSection:section];
-		NSInteger footerHeight = [self.delegate collectionView:self.collectionView heightForFooterInSection:section];
-		
-		JNWCollectionViewFlowLayoutSection *sectionInfo = [[JNWCollectionViewFlowLayoutSection alloc] initWithNumberOfItems:numberOfItems];
-		sectionInfo.offset = totalHeight + headerHeight;
-		sectionInfo.height = 0;
+        //TODO now: these calls must be checked first! Can't rely on conformsToProtocol!
+		CGFloat headerHeight = [self.delegate collectionView:self.collectionView heightForHeaderInSection:section];
+		CGFloat footerHeight = [self.delegate collectionView:self.collectionView heightForFooterInSection:section];
+
+		JNWCollectionViewFlowLayoutSection *sectionInfo = [[JNWCollectionViewFlowLayoutSection alloc]
+		                                                                                       initWithNumberOfItems:numberOfItems];
 		sectionInfo.headerHeight = headerHeight;
 		sectionInfo.footerHeight = footerHeight;
-		
-		CGRect lastAddedItemFrame = CGRectZero;
-		for (NSInteger item = 0; item < numberOfItems; item++) {
-			NSIndexPath *indexPath = [NSIndexPath jnw_indexPathForItem:item inSection:section];
+		sectionInfo.offset = globalVerticalCursor + headerHeight;
+
+		CGFloat sectionCursor = 0;
+
+        JNWCollectionViewFlowLayoutRowInfo row = [self emptyRowWithFirstItemIndex:0];
+
+		for (NSInteger itemIndex = 0; itemIndex < numberOfItems; itemIndex++) {
+            row.itemsRange.length++;
+			NSIndexPath *indexPath = [NSIndexPath jnw_indexPathForItem:itemIndex inSection:section];
 			CGSize itemSize = [self.delegate collectionView:self.collectionView sizeForItemAtIndexPath:indexPath];
-			sectionInfo.itemInfo[item].size = itemSize;
-			
-			CGPoint itemOrigin = lastAddedItemFrame.origin;
-			itemOrigin.x += lastAddedItemFrame.size.width + self.minimumItemHorizontalSeparation;
-			
-			CGRect usableRect = CGRectMake(0, 0, self.collectionView.contentSize.width, sectionInfo.height);
-			
-			// TODO: This will likely not work if the item size is bigger than the visible frame
-			if (CGRectIntersection(usableRect, (CGRect){ .size = itemSize, .origin = itemOrigin}).size.width != itemSize.width) {
-				// The item would be placed off the edge, so we bump to the next line.
-				itemOrigin.x = self.minimumItemHorizontalSeparation;
-				itemOrigin.y = sectionInfo.height;
-				
-				//TODO: This will fail horribly when the item size used for height is smalller than the rest in the row
-				sectionInfo.height += itemSize.height;
+
+            // new row
+			if ((row.cursor + itemSize.width) > rowWidth) {
+                [self adjustAlignmentForRow:row inSection:sectionInfo];
+                sectionCursor += row.height + self.minimumLineSpacing;
+                row = [self emptyRowWithFirstItemIndex:itemIndex];
 			}
-			
-			sectionInfo.itemInfo[item].origin = itemOrigin;
-			sectionInfo.itemInfo[item].size = itemSize;
-			lastAddedItemFrame = (CGRect){ .origin = itemOrigin, .size = itemSize };
+
+			sectionInfo.itemInfo[itemIndex].origin = NSMakePoint(row.cursor, sectionCursor);
+			sectionInfo.itemInfo[itemIndex].size = itemSize;
+
+			row.height = MAX(itemSize.height, row.height);
+            row.cursor += itemSize.width + self.minimumInterItemSpacing;
 		}
-		
-		totalHeight += sectionInfo.height + footerHeight + headerHeight;
+        
+        // adjustment for final row
+        [self adjustAlignmentForRow:row inSection:sectionInfo];
+
+		// cache section details
+		sectionInfo.height = sectionCursor + row.height;
+		globalVerticalCursor = sectionInfo.offset + sectionInfo.height + footerHeight;
 		[self.sections addObject:sectionInfo];
 	}
 }
 
+- (void)adjustAlignmentForRow:(JNWCollectionViewFlowLayoutRowInfo)row inSection:(JNWCollectionViewFlowLayoutSection *)sectionInfo {
+    
+    if(self.alignment == JNWCollectionViewFlowLayoutAlignmentTop) {return;}
+
+    for (NSUInteger idx = row.itemsRange.location; idx < row.itemsRange.location + row.itemsRange.length; idx++) {
+        CGFloat alignmentShift = row.height - sectionInfo.itemInfo[idx].size.height;
+        alignmentShift = (self.alignment == JNWCollectionViewFlowLayoutAlignmentBottom) ? alignmentShift : alignmentShift / 2.0f;
+        sectionInfo.itemInfo[idx].origin.y += alignmentShift;
+    }
+}
+
+- (JNWCollectionViewFlowLayoutRowInfo)emptyRowWithFirstItemIndex:(NSInteger)firstItemIndex {
+    return (JNWCollectionViewFlowLayoutRowInfo){.height=0, .cursor=0, .itemsRange=NSMakeRange(firstItemIndex, 0)};
+}
+
 - (JNWCollectionViewLayoutAttributes *)layoutAttributesForItemAtIndexPath:(NSIndexPath *)indexPath {
-	JNWCollectionViewFlowLayoutSection *section = self.sections[indexPath.section];
-	JNWCollectionViewFlowLayoutItemInfo itemInfo = section.itemInfo[indexPath.item];
+
+	NSParameterAssert(indexPath);
+
+	JNWCollectionViewFlowLayoutSection *section = self.sections[[indexPath indexAtPosition:0]];
+	JNWCollectionViewFlowLayoutItemInfo itemInfo = section.itemInfo[[indexPath indexAtPosition:1]];
 	CGFloat offset = section.offset;
-	
+
 	JNWCollectionViewLayoutAttributes *attributes = [[JNWCollectionViewLayoutAttributes alloc] init];
-	attributes.frame = CGRectMake(itemInfo.origin.x, itemInfo.origin.y + offset, itemInfo.size.width, itemInfo.size.height);
+	attributes.frame = CGRectMake(itemInfo.origin.x,
+	                              itemInfo.origin.y + offset,
+	                              itemInfo.size.width,
+	                              itemInfo.size.height);
 	attributes.alpha = 1.f;
 	return attributes;
 }
+
+#pragma mark - Overrides primarily intended for optimisation
+
+/// returns indexpaths for items whose rect intersects with the supplied rect
+- (NSArray *)indexPathsForItemsInRect:(CGRect)rect {
+    
+    NSMutableArray *indexPaths = [NSMutableArray array];
+    
+    for (NSUInteger sectionIndex = 0; sectionIndex < self.sections.count; sectionIndex++) {
+        
+        JNWCollectionViewFlowLayoutSection *section = self.sections[sectionIndex];
+        
+        for (int itemIndex=0; itemIndex < section.numberOfItems; itemIndex++) {
+            NSIndexPath *itemIndexPath = [NSIndexPath jnw_indexPathForItem:itemIndex inSection:sectionIndex];
+            JNWCollectionViewFlowLayoutItemInfo item = section.itemInfo[itemIndex];
+            NSRect itemRect = NSMakeRect(item.origin.x, item.origin.y + section.offset, item.size.width, item.size.height);
+            if (NSIntersectsRect(rect, itemRect)) {
+                [indexPaths addObject:itemIndexPath];
+            }
+        }
+    }
+
+	return indexPaths;
+}
+
+// seems to be called when resizing
+- (CGRect)rectForSectionAtIndex:(NSInteger)sectionIndex {
+
+	JNWCollectionViewFlowLayoutSection *section = self.sections[sectionIndex];
+	NSRect rect = NSMakeRect(0.0f, section.offset, self.collectionView.contentSize.width, section.height);
+
+	return rect;
+}
+
+
+// TODO: need a more refined approach (read: one that works) to finding above/below items
+- (NSIndexPath *)indexPathForNextItemInDirection:(JNWCollectionViewDirection)direction
+                                currentIndexPath:(NSIndexPath *)currentIndexPath {
+    
+    NSIndexPath *newIndexPath;
+    NSRect currentItemFrame;
+    NSRect candidateFrame;
+    NSArray *candidateIndexPaths;
+    
+    switch (direction) {
+        case JNWCollectionViewDirectionLeft:
+            newIndexPath = [self.collectionView indexPathForNextSelectableItemBeforeIndexPath:currentIndexPath];
+            break;
+        case JNWCollectionViewDirectionRight:
+            newIndexPath = [self.collectionView indexPathForNextSelectableItemAfterIndexPath:currentIndexPath];
+            break;
+        case JNWCollectionViewDirectionUp:
+            currentItemFrame = [self.collectionView rectForItemAtIndexPath:currentIndexPath];
+            candidateFrame = CGRectApplyAffineTransform(currentItemFrame, CGAffineTransformMakeTranslation(0, -currentItemFrame.size.height));
+            candidateIndexPaths = [self.collectionView indexPathsForItemsInRect:candidateFrame];
+            if(candidateIndexPaths.count > 0){
+                newIndexPath = candidateIndexPaths[0];
+            }
+            break;
+        case JNWCollectionViewDirectionDown:
+            currentItemFrame = [self.collectionView rectForItemAtIndexPath:currentIndexPath];
+            candidateFrame = CGRectApplyAffineTransform(currentItemFrame, CGAffineTransformMakeTranslation(0, currentItemFrame.size.height));
+            candidateIndexPaths = [self.collectionView indexPathsForItemsInRect:candidateFrame];
+            if(candidateIndexPaths.count > 0){
+                newIndexPath = candidateIndexPaths[0];
+            }
+            break;
+        default:
+            assert(NO);
+            break;
+    }
+
+    return newIndexPath;
+}
+
+#pragma mark - Headers and Footers
+- (JNWCollectionViewLayoutAttributes *)layoutAttributesForSupplementaryItemInSection:(NSInteger)idx kind:(NSString *)kind {
+
+	JNWCollectionViewFlowLayoutSection *section = self.sections[idx];
+	CGFloat width = self.collectionView.visibleSize.width;
+	CGRect frame = CGRectZero;
+	
+	if ([kind isEqualToString:JNWCollectionViewFlowLayoutHeaderKind]) {
+		frame = CGRectMake(0, section.offset - section.headerHeight, width, section.headerHeight);
+	} else if ([kind isEqualToString:JNWCollectionViewFlowLayoutFooterKind]) {
+		frame = CGRectMake(0, section.offset + section.height, width, section.footerHeight);
+	}
+	
+	JNWCollectionViewLayoutAttributes *attributes = [[JNWCollectionViewLayoutAttributes alloc] init];
+	attributes.frame = frame;
+	attributes.alpha = 1.f;
+	return attributes;
+}
+
+
 
 @end
