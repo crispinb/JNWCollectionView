@@ -26,6 +26,10 @@
 @property (nonatomic, strong) NSColor *color;
 @property (nonatomic, strong) NSImage *image;
 @property (nonatomic, weak) JNWCollectionView *collectionView;
+
+// [cb] temporary!
+@property (nonatomic, strong) NSArray *backgroundCGImages;
+@property (nonatomic, assign) CGFloat backingScaleFactor;
 @end
 
 @implementation JNWCollectionViewCellBackgroundView
@@ -35,11 +39,20 @@
 	if (self == nil) return nil;
 	self.wantsLayer = YES;
 	self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawOnSetNeedsDisplay;
+	[self configureScaleFactorFromWindow];
+    
 	return self;
 }
 
 - (void)setImage:(NSImage *)image {
 	_image = image;
+	[self configureScaleFactorFromWindow];
+	[self setNeedsDisplay:YES];
+}
+
+- (void)setBackgroundCGImages:(NSArray *)backgroundCGImages {
+	_backgroundCGImages = backgroundCGImages;
+	[self configureScaleFactorFromWindow];
 	[self setNeedsDisplay:YES];
 }
 
@@ -60,9 +73,40 @@
 	return YES;
 }
 
+- (void)viewDidChangeBackingProperties {
+	[self configureScaleFactorFromWindow];
+	[self.layer setNeedsDisplay];
+}
+
 - (void)updateLayer {
-	self.layer.contents = self.image;
-	self.layer.backgroundColor = self.color.CGColor;
+
+	if(!self.image && !self.backgroundCGImages){
+		return;
+	}
+
+	id image = [self imageForCurrentScaleFactor];
+
+//	NSLog(@"setting layer image to %@", image);
+    
+	self.layer.contents = image;
+	self.layer.contentsScale = self.backingScaleFactor;
+	self.layer.contentsCenter = CGRectMake(0.5, 0.5, 0, 0);
+	self.layer.contentsGravity = kCAGravityResize;
+}
+
+- (id)imageForCurrentScaleFactor {
+
+	if (self.backingScaleFactor < 2.0f) {
+		return self.backgroundCGImages[0];
+	} else {
+		return self.backgroundCGImages[1];
+	}
+
+}
+
+- (void)configureScaleFactorFromWindow {
+	NSLog(@"changing scale factor to %f", self.window.backingScaleFactor);
+	self.backingScaleFactor = self.window.backingScaleFactor;
 }
 
 @end
@@ -155,6 +199,10 @@
 
 - (NSImage *)backgroundImage {
 	return self.backgroundView.image;
+}
+
+- (void)setBackgroundCGImages:(NSArray *)backgroundCGImages {
+	self.backgroundView.backgroundCGImages = backgroundCGImages;
 }
 
 - (void)mouseDown:(NSEvent *)theEvent {
