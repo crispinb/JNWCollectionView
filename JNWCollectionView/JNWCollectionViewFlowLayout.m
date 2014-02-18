@@ -5,10 +5,9 @@
 //  Created by Jonathan Willing on 4/11/13.
 //  Copyright (c) 2013 AppJon. All rights reserved.
 //
-//  TODO: change copyright to ... ?
+//  Copyright (modifications and additions) 2014 Crispin Bennett
 
 #import "JNWCollectionViewFlowLayout.h"
-#import "JNWCollectionViewLayout.h"
 
 NSString * const JNWCollectionViewFlowLayoutFooterKind = @"JNWCollectionViewFlowLayoutFooterKind";
 NSString * const JNWCollectionViewFlowLayoutHeaderKind = @"JNWCollectionViewFlowLayoutHeaderKind";
