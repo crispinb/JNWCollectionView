@@ -75,8 +75,6 @@ typedef struct {
 	return _sections;
 }
 
-//TODO: selection (nextItemInDirection)
-
 - (void)prepareLayout {
 
 	NSParameterAssert(self.delegate);
@@ -112,7 +110,7 @@ typedef struct {
 
             // new row
 			if ((row.cursor + itemSize.width) > rowWidth) {
-                [self adjustAlignmentForRow:row inSection:sectionInfo];
+				[self adjustVerticalAlignmentForRow:row inSection:sectionInfo];
                 sectionCursor += row.height + self.minimumLineSpacing;
                 row = [self emptyRowWithFirstItemIndex:itemIndex];
 			}
@@ -125,16 +123,16 @@ typedef struct {
 		}
         
         // adjustment for final row
-        [self adjustAlignmentForRow:row inSection:sectionInfo];
+		[self adjustVerticalAlignmentForRow:row inSection:sectionInfo];
 
-		// cache section details
 		sectionInfo.height = sectionCursor + row.height;
-		globalVerticalCursor = sectionInfo.offset + sectionInfo.height + footerHeight;
 		[self.sections addObject:sectionInfo];
+
+		globalVerticalCursor = sectionInfo.offset + sectionInfo.height + footerHeight;
 	}
 }
 
-- (void)adjustAlignmentForRow:(JNWCollectionViewFlowLayoutRowInfo)row inSection:(JNWCollectionViewFlowLayoutSection *)sectionInfo {
+- (void)adjustVerticalAlignmentForRow:(JNWCollectionViewFlowLayoutRowInfo)row inSection:(JNWCollectionViewFlowLayoutSection *)sectionInfo {
     
     if(self.alignment == JNWCollectionViewFlowLayoutAlignmentTop) {return;}
 

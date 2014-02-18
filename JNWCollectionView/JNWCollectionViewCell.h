@@ -46,15 +46,18 @@
 // content view is guaranteed to be in front of the background color or image.
 @property (nonatomic, strong) NSView *contentView;
 
+// Sets the background view directly. This will be given the cell's bounds as frame,
+// and placed below the content view.
+// If this is set, backgroundImage and backgroundColor are ignored
+@property (nonatomic, strong) NSView *backgroundView;
+
 // Sets the background image or background color on a dedicated background view that
 // is always beneath the content view.
 //
+// If backgroundView is set, both these properties are ignored
 // If both are set, the image takes precedence over the color.
 @property (nonatomic, strong) NSImage *backgroundImage;
 @property (nonatomic, strong) NSColor *backgroundColor;
-
-// [cb] temporary!
-@property (nonatomic, strong) NSArray *backgroundCGImages;
 
 // Determines the duration of the crossfade effect applied to the backgroundImage
 // and backgroundColor properties when the animatesSelection property on the collection
